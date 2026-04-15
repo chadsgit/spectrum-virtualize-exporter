@@ -37,7 +37,7 @@ type hostCollector struct {
 }
 
 func NewHostCollector() (Collector, error) {
-	labelnames := []string{"resource", "host_name"}
+	labelnames := []string{"resource", "host_name", "port_count", "protocol"}
 	if len(utils.ExtraLabelNames) > 0 {
 		labelnames = append(labelnames, utils.ExtraLabelNames...)
 	}
@@ -83,8 +83,10 @@ func (c *hostCollector) Collect(sClient utils.SpectrumClient, ch chan<- promethe
 	}
 	jsonLpars := gjson.Parse(respData)
 	jsonLpars.ForEach(func(key, port gjson.Result) bool {
-		host_name := port.Get("name").String()
-		status := port.Get("status").String() // ["online", "offline", "degraded"]
+		host_name  := port.Get("name").String()
+		port_count := port.Get("port_count").String()
+		protocol   := port.Get("protocol").String()
+		status     := port.Get("status").String() // ["online", "offline", "degraded"]
 
 		v_status := 0
 		switch status {
@@ -96,7 +98,7 @@ func (c *hostCollector) Collect(sClient utils.SpectrumClient, ch chan<- promethe
 			v_status = 2
 		}
 
-		labelvalues := []string{sClient.Hostname, host_name}
+		labelvalues := []string{sClient.Hostname, host_name, port_count, protocol}
 		if len(utils.ExtraLabelValues) > 0 {
 			labelvalues = append(labelvalues, utils.ExtraLabelValues...)
 		}
