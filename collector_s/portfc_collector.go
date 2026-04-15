@@ -108,9 +108,6 @@ func (c *portfcCollector) Collect(sClient utils.SpectrumClient, ch chan<- promet
 	jsonPorts := gjson.Parse(respData)
 	jsonPorts.ForEach(func(key, port gjson.Result) bool {
 		port_id := port.Get("port_id").String()
-		if port_id != "1" && port_id != "2" && port_id != "5" && port_id != "6" {
-			return true
-		}
 		node_name := port.Get("node_name").String()
 		wwpn := port.Get("WWPN").String()
 		status := port.Get("status").String() // ["active", "inactive_configured", "inactive_unconfigured"]

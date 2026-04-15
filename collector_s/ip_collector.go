@@ -30,7 +30,7 @@ var (
 )
 
 func init() {
-	registerCollector("ip", defaultEnabled, NewIPCollector)
+	registerCollector("ip", defaultDisabled, NewIPCollector)
 }
 
 // ipCollector collects ip setting metrics
