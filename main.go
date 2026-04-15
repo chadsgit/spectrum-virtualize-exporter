@@ -221,11 +221,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		if r.RequestURI == "/metrics" {
+		if r.URL.Path == "/metrics" {
 			handler, err = h.metricsHandler(targets...)
-		}
-		if r.RequestURI == "/settings" {
+		} else if r.URL.Path == "/settings" {
 			handler, err = h.settingsHandler(targets...)
+		} else {
+			http.NotFound(w, r)
+			return
 		}
 
 		if err != nil {
