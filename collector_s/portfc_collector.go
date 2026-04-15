@@ -38,8 +38,8 @@ type portfcCollector struct {
 }
 
 func NewPortfcCollector() (Collector, error) {
-	labelnames_status := []string{"resource", "node_name", "port_id", "wwpn"}
-	labelnames_attachment := []string{"resource", "node_name", "port_id", "wwpn"}
+	labelnames_status := []string{"resource", "node_name", "port_id", "wwpn", "port_speed", "cluster_use"}
+	labelnames_attachment := []string{"resource", "node_name", "port_id", "wwpn", "port_speed", "cluster_use"}
 	if len(utils.ExtraLabelNames) > 0 {
 		labelnames_status = append(labelnames_status, utils.ExtraLabelNames...)
 		labelnames_attachment = append(labelnames_attachment, utils.ExtraLabelNames...)
@@ -110,6 +110,8 @@ func (c *portfcCollector) Collect(sClient utils.SpectrumClient, ch chan<- promet
 		port_id := port.Get("port_id").String()
 		node_name := port.Get("node_name").String()
 		wwpn := port.Get("WWPN").String()
+		port_speed := port.Get("port_speed").String()
+		cluster_use := port.Get("cluster_use").String()
 		status := port.Get("status").String() // ["active", "inactive_configured", "inactive_unconfigured"]
 		attachment := port.Get("attachment").String()
 
@@ -127,7 +129,7 @@ func (c *portfcCollector) Collect(sClient utils.SpectrumClient, ch chan<- promet
 			v_attachment = 1
 		}
 
-		labelvalues := []string{sClient.Hostname, node_name, port_id, wwpn}
+		labelvalues := []string{sClient.Hostname, node_name, port_id, wwpn, port_speed, cluster_use}
 		if len(utils.ExtraLabelValues) > 0 {
 			labelvalues = append(labelvalues, utils.ExtraLabelValues...)
 		}
