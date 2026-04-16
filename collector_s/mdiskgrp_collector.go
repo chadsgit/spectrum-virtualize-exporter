@@ -22,11 +22,18 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+
+
 const prefix_mdiskgrp = "mdiskgrp_"
 
 var (
-	mdiskgrp_status *prometheus.Desc
-	online_pools    []string
+	mdiskgrp_status            *prometheus.Desc
+	mdiskgrp_capacity          *prometheus.Desc
+	mdiskgrp_free_capacity     *prometheus.Desc
+	mdiskgrp_used_capacity     *prometheus.Desc
+	mdiskgrp_virtual_capacity  *prometheus.Desc
+	mdiskgrp_real_capacity     *prometheus.Desc
+	online_pools               []string
 )
 
 func init() {
@@ -43,12 +50,22 @@ func NewMdiskgrpCollector() (Collector, error) {
 		labelnames = append(labelnames, utils.ExtraLabelNames...)
 	}
 	mdiskgrp_status = prometheus.NewDesc(prefix_mdiskgrp+"status", "Status of storage pools that are visible to the system. 0-online; 1-offline; 2-others.", labelnames, nil)
+	mdiskgrp_capacity = prometheus.NewDesc(prefix_mdiskgrp+"capacity_bytes", "Total raw capacity of the storage pool in bytes.", labelnames, nil)
+	mdiskgrp_free_capacity = prometheus.NewDesc(prefix_mdiskgrp+"free_capacity_bytes", "Free capacity of the storage pool in bytes.", labelnames, nil)
+	mdiskgrp_used_capacity = prometheus.NewDesc(prefix_mdiskgrp+"used_capacity_bytes", "Used capacity of the storage pool in bytes.", labelnames, nil)
+	mdiskgrp_virtual_capacity = prometheus.NewDesc(prefix_mdiskgrp+"virtual_capacity_bytes", "Virtual capacity allocated to volumes in the pool in bytes.", labelnames, nil)
+	mdiskgrp_real_capacity = prometheus.NewDesc(prefix_mdiskgrp+"real_capacity_bytes", "Real capacity consumed in the pool in bytes.", labelnames, nil)
 	return &mdiskgrpCollector{}, nil
 }
 
 // Describe() describes the metrics
 func (*mdiskgrpCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- mdiskgrp_status
+	ch <- mdiskgrp_capacity
+	ch <- mdiskgrp_free_capacity
+	ch <- mdiskgrp_used_capacity
+	ch <- mdiskgrp_virtual_capacity
+	ch <- mdiskgrp_real_capacity
 }
 
 // Collect() collects metrics from Spectrum Virtualize Restful API
@@ -139,6 +156,22 @@ func (c *mdiskgrpCollector) Collect(sClient utils.SpectrumClient, ch chan<- prom
 		}
 
 		ch <- prometheus.MustNewConstMetric(mdiskgrp_status, prometheus.GaugeValue, float64(v_status), labelvalues...)
+
+		if cap_bytes, err := utils.ToBytes(port.Get("capacity").String()); err == nil {
+			ch <- prometheus.MustNewConstMetric(mdiskgrp_capacity, prometheus.GaugeValue, float64(cap_bytes), labelvalues...)
+		}
+		if free_bytes, err := utils.ToBytes(port.Get("free_capacity").String()); err == nil {
+			ch <- prometheus.MustNewConstMetric(mdiskgrp_free_capacity, prometheus.GaugeValue, float64(free_bytes), labelvalues...)
+		}
+		if used_bytes, err := utils.ToBytes(port.Get("used_capacity").String()); err == nil {
+			ch <- prometheus.MustNewConstMetric(mdiskgrp_used_capacity, prometheus.GaugeValue, float64(used_bytes), labelvalues...)
+		}
+		if virt_bytes, err := utils.ToBytes(port.Get("virtual_capacity").String()); err == nil {
+			ch <- prometheus.MustNewConstMetric(mdiskgrp_virtual_capacity, prometheus.GaugeValue, float64(virt_bytes), labelvalues...)
+		}
+		if real_bytes, err := utils.ToBytes(port.Get("real_capacity").String()); err == nil {
+			ch <- prometheus.MustNewConstMetric(mdiskgrp_real_capacity, prometheus.GaugeValue, float64(real_bytes), labelvalues...)
+		}
 		return true
 	})
 

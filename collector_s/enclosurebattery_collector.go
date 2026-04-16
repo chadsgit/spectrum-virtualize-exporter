@@ -27,6 +27,7 @@ const prefix_enclosurebattery = "enclosurebattery_"
 var (
 	battery_status              *prometheus.Desc
 	battery_end_of_life_warning *prometheus.Desc
+	battery_recondition_needed  *prometheus.Desc
 )
 
 func init() {
@@ -46,6 +47,7 @@ func NewEnclosureBatteryCollector() (Collector, error) {
 	}
 	battery_status = prometheus.NewDesc(prefix_enclosurebattery+"status", "Identifies status of each battery in enclosures. 0-online; 1-offline; 2-degraded.", labelnames_status, nil)
 	battery_end_of_life_warning = prometheus.NewDesc(prefix_enclosurebattery+"end_of_life_warning", "Identifies the battery's end of life. Replace the battery if yes. 0-no; 1-yes.", labelnames_eolw, nil)
+	battery_recondition_needed = prometheus.NewDesc(prefix_enclosurebattery+"recondition_needed", "Indicates whether battery reconditioning is required. 0-no; 1-yes.", labelnames_status, nil)
 	return &enclosureBatteryCollector{}, nil
 }
 
@@ -53,6 +55,7 @@ func NewEnclosureBatteryCollector() (Collector, error) {
 func (*enclosureBatteryCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- battery_status
 	ch <- battery_end_of_life_warning
+	ch <- battery_recondition_needed
 }
 
 // Collect collects metrics from Spectrum Virtualize Restful API
@@ -93,8 +96,9 @@ func (c *enclosureBatteryCollector) Collect(sClient utils.SpectrumClient, ch cha
 	jsonBatteries.ForEach(func(key, battery gjson.Result) bool {
 		enclosure_id := battery.Get("enclosure_id").String()
 		battery_id := battery.Get("battery_id").String()
-		status := battery.Get("status").String()                           // ["online", "offline", "degraded"]
-		end_of_life_warning := battery.Get("end_of_life_warning").String() // ["yes", "no"]
+		status := battery.Get("status").String()                               // ["online", "offline", "degraded"]
+		end_of_life_warning := battery.Get("end_of_life_warning").String()     // ["yes", "no"]
+		recondition_needed := battery.Get("recondition_needed").String()       // ["yes", "no"]
 
 		labelvalues := []string{sClient.Hostname, enclosure_id, battery_id}
 		if len(utils.ExtraLabelValues) > 0 {
@@ -113,13 +117,16 @@ func (c *enclosureBatteryCollector) Collect(sClient utils.SpectrumClient, ch cha
 		ch <- prometheus.MustNewConstMetric(battery_status, prometheus.GaugeValue, float64(v_status), labelvalues...)
 
 		v_eolw := 0
-		switch end_of_life_warning {
-		case "no":
-			v_eolw = 0
-		case "yes":
+		if end_of_life_warning == "yes" {
 			v_eolw = 1
 		}
 		ch <- prometheus.MustNewConstMetric(battery_end_of_life_warning, prometheus.GaugeValue, float64(v_eolw), labelvalues...)
+
+		v_recondition := 0
+		if recondition_needed == "yes" {
+			v_recondition = 1
+		}
+		ch <- prometheus.MustNewConstMetric(battery_recondition_needed, prometheus.GaugeValue, float64(v_recondition), labelvalues...)
 		return true
 	})
 

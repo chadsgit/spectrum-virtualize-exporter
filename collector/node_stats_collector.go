@@ -27,7 +27,7 @@ var (
 )
 
 func init() {
-	registerCollector("lsnodestats", defaultDisabled, NewNodeStatsCollector)
+	registerCollector("lsnodestats", defaultEnabled, NewNodeStatsCollector)
 }
 
 // nodeStatsCollector collects nodeStats metrics

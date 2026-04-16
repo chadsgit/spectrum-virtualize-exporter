@@ -29,6 +29,7 @@ var (
 	drive_status                     *prometheus.Desc
 	drive_firmware_level             *prometheus.Desc
 	drive_firmware_level_consistency *prometheus.Desc
+	drive_write_endurance_used       *prometheus.Desc
 )
 
 func init() {
@@ -51,6 +52,7 @@ func NewDriveCollector() (Collector, error) {
 	drive_status = prometheus.NewDesc(prefix_drive+"status", "Indicates the status of the drive. 0-online; 1-offline; 2-degraded.", labelnames_drive, nil)
 	drive_firmware_level = prometheus.NewDesc(prefix_drive+"firmware_level", "Indicates the firmware level consistency of disks. 0-consistent; 1-inconsistent.", labelnames_firmware, nil)
 	drive_firmware_level_consistency = prometheus.NewDesc(prefix_drive+"firmware_level_consistency", "Indicates the firmware level consistency of disks. 0-consistent; 1-inconsistent.", labelnames_firmware_consistency, nil)
+	drive_write_endurance_used = prometheus.NewDesc(prefix_drive+"write_endurance_used_percent", "Percentage of write endurance used for the drive (flash drives only).", labelnames_drive, nil)
 	return &DriveCollector{}, nil
 }
 
@@ -59,6 +61,7 @@ func (*DriveCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- drive_status
 	ch <- drive_firmware_level
 	ch <- drive_firmware_level_consistency
+	ch <- drive_write_endurance_used
 }
 
 // Collect collects metrics from Spectrum Virtualize Restful API
@@ -195,6 +198,17 @@ func (c *DriveCollector) Collect(sClient utils.SpectrumClient, ch chan<- prometh
 			labelvalues_firmware = append(labelvalues_firmware, utils.ExtraLabelValues...)
 		}
 		ch <- prometheus.MustNewConstMetric(drive_firmware_level, prometheus.GaugeValue, float64(v_firmware_consistency), labelvalues_firmware...)
+
+		// write endurance (empty string = not applicable for this drive type, skip)
+		if endurance_str := jsonDrive.Get("write_endurance_used").String(); endurance_str != "" {
+			enclosure_id := jsonDrive.Get("enclosure_id").String()
+			slot_id := jsonDrive.Get("slot_id").String()
+			labelvalues_endurance := []string{sClient.Hostname, drive_id, enclosure_id, slot_id}
+			if len(utils.ExtraLabelValues) > 0 {
+				labelvalues_endurance = append(labelvalues_endurance, utils.ExtraLabelValues...)
+			}
+			ch <- prometheus.MustNewConstMetric(drive_write_endurance_used, prometheus.GaugeValue, jsonDrive.Get("write_endurance_used").Float(), labelvalues_endurance...)
+		}
 	}
 	labelvalues_firmware_consistency := []string{sClient.Hostname}
 	if len(utils.ExtraLabelValues) > 0 {

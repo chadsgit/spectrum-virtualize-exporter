@@ -24,10 +24,11 @@ const prefix_volume = "volume_"
 
 var (
 	volumeCapacity *prometheus.Desc
+	volumeStatus   *prometheus.Desc
 )
 
 func init() {
-	registerCollector("lsvdisk", defaultDisabled, NewVolumeCollector)
+	registerCollector("lsvdisk", defaultEnabled, NewVolumeCollector)
 }
 
 // volumeCollector collects vdisk metrics
@@ -40,15 +41,15 @@ func NewVolumeCollector() (Collector, error) {
 		labelnames = append(labelnames, utils.ExtraLabelNames...)
 	}
 	volumeCapacity = prometheus.NewDesc(prefix_volume+"capacity", "The virtual capacity of the volume that is the size of the volume as seen by the host.", labelnames, nil)
+	volumeStatus = prometheus.NewDesc(prefix_volume+"status", "Status of the volume. 0-online; 1-offline; 2-degraded.", labelnames, nil)
 
 	return &volumeCollector{}, nil
 }
 
 // Describe describes the metrics
 func (*volumeCollector) Describe(ch chan<- *prometheus.Desc) {
-
 	ch <- volumeCapacity
-
+	ch <- volumeStatus
 }
 
 // Collect collects metrics from Spectrum Virtualize Restful API
@@ -104,6 +105,17 @@ func (c *volumeCollector) Collect(sClient utils.SpectrumClient, ch chan<- promet
 			labelvalues = append(labelvalues, utils.ExtraLabelValues...)
 		}
 		ch <- prometheus.MustNewConstMetric(volumeCapacity, prometheus.GaugeValue, float64(capacity_bytes), labelvalues...)
+
+		v_status := 0
+		switch volume.Get("status").String() {
+		case "online":
+			v_status = 0
+		case "offline":
+			v_status = 1
+		case "degraded":
+			v_status = 2
+		}
+		ch <- prometheus.MustNewConstMetric(volumeStatus, prometheus.GaugeValue, float64(v_status), labelvalues...)
 	}
 	logger.Debugln("exit volume collector")
 	return nil
