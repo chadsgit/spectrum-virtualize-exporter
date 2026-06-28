@@ -58,7 +58,7 @@ func (*systemInfoCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *systemInfoCollector) Collect(sClient utils.SpectrumClient, ch chan<- prometheus.Metric) error {
 	logger.Debugln("entering systemInfo collector ...")
 
-	// lssystem — product name, code level, friendly system name
+	// lssystem -- product name, code level, friendly system name
 	sysData, err := sClient.CallSpectrumAPI("lssystem", true)
 	if err != nil {
 		logger.Errorf("executing lssystem cmd failed: %s", err.Error())
@@ -72,7 +72,7 @@ func (c *systemInfoCollector) Collect(sClient utils.SpectrumClient, ch chan<- pr
 	product_name := gjson.Get(sysData, "product_name").String()
 	code_level := gjson.Get(sysData, "code_level").String()
 
-	// lsenclosure — machine type/model (product_MTM) and serial number from the control enclosure
+	// lsenclosure -- machine type/model (product_MTM) and serial number from the control enclosure
 	encData, err := sClient.CallSpectrumAPI("lsenclosure", true)
 	if err != nil {
 		logger.Errorf("executing lsenclosure cmd failed: %s", err.Error())
