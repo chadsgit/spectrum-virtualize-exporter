@@ -25,7 +25,8 @@ import (
 const prefix_nodecanister = "nodecanister_"
 
 var (
-	nodecanister_status *prometheus.Desc
+	nodecanister_status     *prometheus.Desc
+	nodecanister_cache_size *prometheus.Desc
 )
 
 func init() {
@@ -42,12 +43,14 @@ func NewNodecanisterCollector() (Collector, error) {
 		labelnames = append(labelnames, utils.ExtraLabelNames...)
 	}
 	nodecanister_status = prometheus.NewDesc(prefix_nodecanister+"status", "Status of nodes that are part of the system. 0-online; 1-offline; 2-service; 3-flushing; 4-pending; 5-adding; 6-deleting.", labelnames, nil)
+	nodecanister_cache_size = prometheus.NewDesc(prefix_nodecanister+"cache_size_bytes", "Cache memory size in bytes for the node canister.", labelnames, nil)
 	return &nodecanisterCollector{}, nil
 }
 
 // Describe describes the metrics
 func (*nodecanisterCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- nodecanister_status
+	ch <- nodecanister_cache_size
 }
 
 // Collect collects metrics from Spectrum Virtualize Restful API
@@ -89,8 +92,9 @@ func (c *nodecanisterCollector) Collect(sClient utils.SpectrumClient, ch chan<- 
 	}
 	jsonNodes := gjson.Parse(respData)
 	jsonNodes.ForEach(func(key, port gjson.Result) bool {
+		node_id := port.Get("id").String()
 		node_name := port.Get("name").String()
-		status := port.Get("status").String() // ["online", "offline", "degraded"]
+		status := port.Get("status").String()
 
 		v_status := 0
 		switch status {
@@ -116,6 +120,19 @@ func (c *nodecanisterCollector) Collect(sClient utils.SpectrumClient, ch chan<- 
 		}
 
 		ch <- prometheus.MustNewConstMetric(nodecanister_status, prometheus.GaugeValue, float64(v_status), labelvalues...)
+
+		// fetch per-node detail for cache size (memory field not in list response)
+		detailResp, err := sClient.CallSpectrumAPI("lsnodecanister/"+node_id, true)
+		if err != nil {
+			logger.Errorf("executing lsnodecanister/%s cmd failed: %s", node_id, err.Error())
+			return true
+		}
+		if gjson.Valid(detailResp) {
+			memGiB := gjson.Get(detailResp, "memory").Float()
+			if memGiB > 0 {
+				ch <- prometheus.MustNewConstMetric(nodecanister_cache_size, prometheus.GaugeValue, memGiB*1024*1024*1024, labelvalues...)
+			}
+		}
 		return true
 	})
 

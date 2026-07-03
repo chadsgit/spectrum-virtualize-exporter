@@ -22,10 +22,13 @@ import (
 
 const prefix_mdisk = "mdisk_"
 
-var mdiskCapacity *prometheus.Desc
+var (
+	mdiskCapacity *prometheus.Desc
+	mdiskStatus   *prometheus.Desc
+)
 
 func init() {
-	registerCollector("lsmdisk", defaultDisabled, NewMdiskCollector)
+	registerCollector("lsmdisk", defaultEnabled, NewMdiskCollector)
 }
 
 // mdiskCollector collects mdisk metrics
@@ -34,10 +37,13 @@ type mdiskCollector struct {
 
 func NewMdiskCollector() (Collector, error) {
 	labelnames := []string{"resource", "name", "status", "mdisk_grp_name", "tier"}
+	labelnamesStatus := []string{"resource", "name", "mdisk_grp_name", "tier"}
 	if len(utils.ExtraLabelNames) > 0 {
 		labelnames = append(labelnames, utils.ExtraLabelNames...)
+		labelnamesStatus = append(labelnamesStatus, utils.ExtraLabelNames...)
 	}
 	mdiskCapacity = prometheus.NewDesc(prefix_mdisk+"capacity", "The capacity of the MDisk by pool", labelnames, nil)
+	mdiskStatus = prometheus.NewDesc(prefix_mdisk+"status", "Status of the MDisk. 0-online; 1-degraded; 2-offline.", labelnamesStatus, nil)
 
 	return &mdiskCollector{}, nil
 }
@@ -45,6 +51,7 @@ func NewMdiskCollector() (Collector, error) {
 // Describe describes the metrics
 func (*mdiskCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- mdiskCapacity
+	ch <- mdiskStatus
 }
 
 // Collect collects metrics from Spectrum Virtualize Restful API
@@ -82,16 +89,35 @@ func (c *mdiskCollector) Collect(sClient utils.SpectrumClient, ch chan<- prometh
 	// ]
 	mDisks := gjson.Parse(mDiskResp).Array()
 	for _, mdisk := range mDisks {
+		name := mdisk.Get("name").String()
+		status := mdisk.Get("status").String()
+		mdisk_grp_name := mdisk.Get("mdisk_grp_name").String()
+		tier := mdisk.Get("tier").String()
+
 		capacity_bytes, err := utils.ToBytes(mdisk.Get("capacity").String())
 		if err != nil {
 			logger.Errorf("converting capacity unit failed: %s", err.Error())
 		}
-		labelvalues := []string{sClient.Hostname, mdisk.Get("name").String(), mdisk.Get("status").String(), mdisk.Get("mdisk_grp_name").String(), mdisk.Get("tier").String()}
+		labelvalues := []string{sClient.Hostname, name, status, mdisk_grp_name, tier}
 		if len(utils.ExtraLabelValues) > 0 {
 			labelvalues = append(labelvalues, utils.ExtraLabelValues...)
 		}
 		ch <- prometheus.MustNewConstMetric(mdiskCapacity, prometheus.GaugeValue, float64(capacity_bytes), labelvalues...)
 
+		v_status := 0
+		switch status {
+		case "online":
+			v_status = 0
+		case "degraded":
+			v_status = 1
+		case "offline":
+			v_status = 2
+		}
+		labelvaluesStatus := []string{sClient.Hostname, name, mdisk_grp_name, tier}
+		if len(utils.ExtraLabelValues) > 0 {
+			labelvaluesStatus = append(labelvaluesStatus, utils.ExtraLabelValues...)
+		}
+		ch <- prometheus.MustNewConstMetric(mdiskStatus, prometheus.GaugeValue, float64(v_status), labelvaluesStatus...)
 	}
 	logger.Debugln("exit MDisk collector")
 	return nil
